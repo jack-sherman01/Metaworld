@@ -11,6 +11,10 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+trained_models/
+temp_test/
+results/
+logs/
 .Python
 build/
 develop-eggs/
