@@ -81,6 +81,56 @@ class SawyerPushEnvV3(SawyerXYZEnv):
     def model_name(self) -> str:
         return full_V3_path_for("sawyer_xyz/sawyer_push_v3.xml")
 
+    def get_image(
+        self,
+        width: int = 640,
+        height: int = 480,
+    ) -> npt.NDArray[np.uint8] | None:
+        """
+        获取当前环境的侧视图图像。
+        
+        Args:
+            width: 图像宽度，默认 640
+            height: 图像高度，默认 480
+        
+        Returns:
+            RGB 图像数组，shape 为 (height, width, 3)，dtype 为 uint8
+            如果无法渲染则返回 None
+        """
+        # 检查是否可以渲染
+        if self.render_mode is None:
+            # 如果没有设置 render_mode，直接使用 mujoco_renderer
+            try:
+                # 保存原始相机设置
+                original_camera_name = self.mujoco_renderer.camera_name
+                self.mujoco_renderer.camera_name = "corner"
+                
+                # 强制使用 rgb_array 模式渲染
+                image = self.mujoco_renderer.render(render_mode="rgb_array")
+                
+                # 恢复原始相机设置
+                self.mujoco_renderer.camera_name = original_camera_name
+            except Exception:
+                return None
+        else:
+            # 如果有 render_mode，使用 render 方法
+            image = self.render()
+        
+        if image is None:
+            return None
+        
+        # 调整图像尺寸
+        if image.shape[0] != height or image.shape[1] != width:
+            from PIL import Image
+            pil_image = Image.fromarray(image)
+            resized_image = pil_image.resize(
+                (width, height),
+                Image.Resampling.BILINEAR
+            )
+            image = np.array(resized_image, dtype=np.uint8)
+        
+        return image
+
     @SawyerXYZEnv._Decorators.assert_task_is_set
     def evaluate_state(
         self, obs: npt.NDArray[np.float64], action: npt.NDArray[np.float32]
@@ -240,3 +290,27 @@ class SawyerPushEnvV3(SawyerXYZEnv):
                 pushRew = 0
             reward = reachRew + pushRew
             return float(reward), 0.0, 0.0, float(pushDist), 0.0, 0.0
+
+    def reset(
+        self,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[npt.NDArray[np.float64], dict[str, Any]]:
+        """
+        重置环境并返回观察和包含图像的 info 字典。
+        
+        Args:
+            seed: 随机种子（被忽略，使用 seed() 方法）
+            options: 额外选项（被忽略）
+        
+        Returns:
+            (obs, info) 元组，其中 info["image"] 包含当前图像（如果可用）
+        """
+        obs, info = super().reset(seed=seed, options=options)
+        
+        # 尝试获取图像，如果失败则不添加到 info
+        image = self.get_image()
+        if image is not None:
+            info["image"] = image
+        
+        return obs, info
