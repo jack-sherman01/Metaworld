@@ -12,6 +12,8 @@ xvfb-run -a bash train_MT10.sh
 
 # 断开 session（按 Ctrl+B 然后 D）
 
+# run a single task push-v3 using omniReward:
+xvfb-run -a python3 scripts/train_with_omni_reward.py
 
 # run a single task push-v3
 xvfb-run -a python scripts/train_sb3_single_task.py \
