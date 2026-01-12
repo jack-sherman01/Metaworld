@@ -1,60 +1,100 @@
 """
-使用 omni_reward 训练 SawyerPushEnvV3 的示例脚本。
+Example script for training SawyerPushEnvV3 with omni_reward.
 """
 import sys
 sys.path.insert(0, "/home/hzhang/heng/omniR/omni_reward")
 sys.path.insert(0, "/home/hzhang/heng/omniR/Metaworld")
 
+import os
 import gymnasium as gym
 import numpy as np
-from metaworld.envs.sawyer_push_omni_reward import SawyerPushOmniRewardEnv
+from metaworld.envs.sawyer_push_v3 import SawyerPushEnvV3
 import metaworld
 
-# 首先创建 MT10 benchmark 来获取任务
+from examples.env_wrapper import OmniRewardWrapper
+from omni_reward.vision.captioner import VLMCaptioner
+from omni_reward.vision.text_encoder import TextEncoder
+
+# Get API key from environment variable
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    raise ValueError("Please set the OPENAI_API_KEY environment variable")
+
+# First create MT10 benchmark to get tasks
 mt10 = metaworld.MT10()
 
-# 获取 push-v3 任务
+# Get push-v3 task
 push_tasks = [task for task in mt10.train_tasks if task.env_name == 'push-v3']
-print(f"Number of push tasks: {len(push_tasks)}")
+print(f"Number of push task variants: {len(push_tasks)}")  # Will be 50 variants
 
-if len(push_tasks) == 0:
-    # 如果没有找到，打印所有可用的任务名称
-    all_task_names = set(task.env_name for task in mt10.train_tasks)
-    print(f"Available task names: {all_task_names}")
-    # 尝试匹配包含 'push' 的任务
-    push_tasks = [task for task in mt10.train_tasks if 'push' in task.env_name.lower()]
-    print(f"Tasks containing 'push': {len(push_tasks)}")
+# Use only the first variant
+if push_tasks:
+    push_task = push_tasks[0]
+    print(f"Using push task: {push_task.env_name}")
 
-# 创建使用 omni_reward 的环境
-env = SawyerPushOmniRewardEnv(
+# Create base environment
+base_env = SawyerPushEnvV3(
     render_mode="rgb_array",
-    task_description="Push the puck to the red goal position. "
-                     "The robot arm should approach the puck and push it towards the goal.",
-    use_original_reward=False,  # 只使用 omni_reward
-    omni_reward_weight=1.0,
+    height=480,
+    width=480,
 )
 
-# 必须先设置任务！
+# Must set task first!
 if push_tasks:
-    env.set_task(push_tasks[0])
+    base_env.set_task(push_tasks[0])
 else:
-    # 如果还是找不到，使用第一个任务
     print("No push task found, using first available task")
-    env.set_task(mt10.train_tasks[0])
+    base_env.set_task(mt10.train_tasks[0])
 
-# 测试环境
+# Initialize omni_reward components
+captioner = VLMCaptioner()
+text_encoder = TextEncoder()
+
+# Wrap with OmniRewardWrapper
+goal_text = ("Push the puck to the red goal position. "
+             "The robot arm should approach the puck and push it towards the goal.")
+
+env = OmniRewardWrapper(
+    env=base_env,
+    captioner=captioner,
+    text_encoder=text_encoder,
+    goal_text=goal_text,
+    use_subgoals=True,
+    openai_api_key=openai_api_key,
+    task_name="push-v3",
+    camera_name="corner2",  # Side view
+)
+
+# Test the environment
 obs, info = env.reset()
 print(f"Initial observation shape: {obs.shape}")
 print(f"Image available: {'image' in info}")
+print("="*80)
 
-for step in range(10):
+for step in range(1):  # Run 10 steps to test
     action = env.action_space.sample()
     obs, reward, terminated, truncated, info = env.step(action)
-    print(f"Step {step}: reward={reward:.4f}, "
-          f"omni_reward={info.get('omni_reward', 0):.4f}, "
-          f"original_reward={info.get('original_reward', 0):.4f}")
+    
+    # Print reward and subgoal info
+    print(f"\n--- Step {step} ---")
+    print(f"Reward: {reward:.4f}")
+    
+    # If omni_reward_info exists, print detailed info
+    if 'omni_reward_info' in info:
+        omni_info = info['omni_reward_info']
+        print(f"Omni Reward Info:")
+        print(f"  - Current subgoal index: {omni_info.get('current_subgoal_index', 'N/A')}")
+        print(f"  - Current subgoal: {omni_info.get('current_subgoal', 'N/A')}")
+        print(f"  - Subgoal reward: {omni_info.get('reward', 0.0):.4f}")
+        print(f"  - Subgoal completed: {omni_info.get('subgoal_completed', False)}")
+        print(f"  - All completed: {omni_info.get('all_completed', False)}")
+        if 'all_subgoals' in omni_info:
+            print(f"  - Total subgoals: {len(omni_info['all_subgoals'])}")
+            print(f"  - All subgoals: {omni_info['all_subgoals']}")
     
     if terminated or truncated:
+        print(f"\nEpisode ended: terminated={terminated}, truncated={truncated}")
         obs, info = env.reset()
+        print("="*80)
 
 env.close()

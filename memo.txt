@@ -1,21 +1,21 @@
-# 创建 tmux session
+# Create a tmux session
 tmux new -s mt10_train
 
 if already there:
 tmux kill-session -t mt10_train
 
-# 用 xvfb-run 运行（模拟虚拟显示器）
+# Run with xvfb-run (simulate a virtual display)
 cd /home/hzhang/heng/omniR/Metaworld
 conda activate metaworld
 
 xvfb-run -a bash train_MT10.sh
 
-# 断开 session（按 Ctrl+B 然后 D）
+# Detach the session (press Ctrl+B then D)
 
-# run a single task push-v3 using omniReward:
+# Run a single task push-v3 using omniReward:
 xvfb-run -a python3 scripts/train_with_omni_reward.py
 
-# run a single task push-v3
+# Run a single task push-v3
 xvfb-run -a python scripts/train_sb3_single_task.py \
   --benchmark MT10 \
   --task push-v3 \
