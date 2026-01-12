@@ -46,8 +46,11 @@ else:
     print("No push task found, using first available task")
     base_env.set_task(mt10.train_tasks[0])
 
-# Initialize omni_reward components
-captioner = VLMCaptioner()
+# Initialize omni_reward components with detailed captions
+captioner = VLMCaptioner(
+    caption_template="detailed_state",  # Use detailed template
+    max_caption_tokens=1024,  # Allow longer responses
+)
 text_encoder = TextEncoder()
 
 # Wrap with OmniRewardWrapper
