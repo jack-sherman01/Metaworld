@@ -12,10 +12,14 @@ xvfb-run -a bash train_MT10.sh
 
 # Detach the session (press Ctrl+B then D)
 
-# Run a single task push-v3 using omniReward:
+## Run a single task push-v3 using omniReward:
 xvfb-run -a python3 scripts/train_with_omni_reward.py
 
-# Run a single task push-v3
+## using local LLaVA model
+xvfb-run -a python scripts/train_with_omni_reward.py --provider llava --device cuda
+
+
+## Run a single task push-v3
 xvfb-run -a python scripts/train_sb3_single_task.py \
   --benchmark MT10 \
   --task push-v3 \
